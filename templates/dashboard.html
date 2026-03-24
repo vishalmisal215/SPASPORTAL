@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- HOME SECTION -->
+<section id="section-home" class="dashboard-section active">
+ <div class="hero hero-small">
+ <h1>Welcome, {{ user.full_name }}!!</h1>
+ <p>Select a section from the menu to navigate</p>
+ </div>
+</section>
+
+
+<!-- PROFILE SECTION -->
+<section id="section-profile" class="dashboard-section">
+ <div class="card card-tilt">
+ <h2>My Profile</h2>
+ 
+ <div id="profile-info" class="profile-info">
+ <p><strong>Roll Number:</strong> {{ user.roll_no }}</p>
+ <p><strong>Full Name:</strong> {{ user.full_name }}</p>
+ <p><strong>Branch:</strong> {{ user.branch }}</p>
+ <p><strong>Year:</strong> {{ user.year }}</p>
+ <p><strong>Batch:</strong> Batch {{ user.batch }}</p>
+ <p><strong>Email:</strong> {{ user.email }}</p>
+ <button id="edit-profile-btn" class="btn btn-primary">Edit Profile</button>
+ </div>
+ 
+ <div id="profile-form" style="display: none;">
+ <form method="post" action="{{ url_for('update_profile') }}">
+ <label>Roll Number</label>
+ <input type="text" value="{{ user.roll_no }}" disabled>
+ <label>Full Name</label>
+ <input type="text" name="full_name" value="{{ user.full_name }}" required>
+ <label>Branch</label>
+ <select name="branch" required>
+ <option value="CSE" {% if user.branch == 'CM' %}selected{% endif %}>CM</option>
+ <option value="IT" {% if user.branch == 'IT' %}selected{% endif %}>IT</option>
+ 
+ </select>
+ <label>Year</label>
+ <select name="year" required>
+ <option value="1st" {% if user.year == '1st Year' or user.year == '1st' %}selected{% endif %}>1st</option>
+ <option value="2nd" {% if user.year == '2nd Year' or user.year == '2nd' %}selected{% endif %}>2nd</option>
+ <option value="3rd" {% if user.year == '3rd Year' or user.year == '3rd' %}selected{% endif %}>3rd</option>
+ </select>
+ <label>Batch</label>
+ <select name="batch" required>
+ <option value="1" {% if user.batch == '1' %}selected{% endif %}>Batch 1</option>
+ <option value="2" {% if user.batch == '2' %}selected{% endif %}>Batch 2</option>
+ <option value="3" {% if user.batch == '3' %}selected{% endif %}>Batch 3</option>
+ </select>
+ <label>Email</label>
+ <input type="email" name="email" value="{{ user.email }}" required>
+ <div style="margin-top: 15px; display: flex; gap: 10px;">
+ <button type="submit" class="btn btn-primary">Save Changes</button>
+ <button type="button" id="cancel-edit-btn" class="btn btn-secondary">Cancel</button>
+ </div>
+ </form>
+ </div>
+ <div style="margin-top: 40px; padding-top: 30px; border-top: 3px solid #e0e0e0;">
+ <h3 style="color: #1976d2; margin-bottom: 10px;">Change Password</h3>
+ <form method="post" action="{{ url_for('student_change_password') }}">
+ <label>Roll Number or Email</label>
+ <input type="text" name="identifier" required placeholder="Enter your Roll No or Email" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px;">
+ <label>New Password</label>
+ <input type="password" name="new_password" required placeholder="Enter new password (min 6 chars)" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px;">
+ <button type="submit" class="btn btn-primary">Update Password</button>
+ </form>
+ </div>
+
+ <div style="margin-top: 40px; padding-top: 30px; border-top: 3px solid #e0e0e0;">
+ <h3 style="color: #c62828; margin-bottom: 10px;">Danger Zone</h3>
+ <p style="color: #666; font-size: 14px; margin-bottom: 15px; line-height: 1.6;">
+ Deleting your account is <strong>permanent and cannot be undone</strong>. 
+ All your exam results and data will be permanently deleted.
+ </p>
+ <button onclick="confirmDeleteAccount()" class="btn" style="background: #c62828; color: white; border: 2px solid #c62828;">
+ Delete My Account
+ </button>
+ </div>
+ </div>
+</section>
+
+<script>
+function confirmDeleteAccount() {
+ if (confirm('WARNING: This will permanently delete your account and ALL your exam data. This action CANNOT be undone!\n\nAre you absolutely sure?')) {
+ if (confirm('FINAL CONFIRMATION: Delete account permanently?')) {
+ const form = document.createElement('form');
+ form.method = 'POST';
+ form.action = '/delete_account';
+ document.body.appendChild(form);
+ form.submit();
+ }
+ }
+}
+</script>
+
+<!-- INSTRUCTIONS SECTION -->
+<section id="section-instructions" class="dashboard-section">
+ <div class="card card-tilt compact-card">
+ <h2>Exam Instructions</h2>
+ <ul class="compact-list">
+ <li><strong>Total Questions:</strong> 20 multiple choice questions randomly selected</li>
+ <li><strong>Duration:</strong> 30 minutes (timer will be displayed at the top)</li>
+ <li><strong>Marking:</strong> Each correct answer carries 1 mark</li>
+ <li><strong>Attempt:</strong> You can attempt all or selected questions</li>
+ <li><strong>Submission:</strong> Click "Submit Exam" button only when you're sure</li>
+ <li><strong>Auto-submit:</strong> Exam will auto-submit when time runs out</li>
+ <li><strong>Result:</strong> You will see your result immediately after submission</li>
+ <li><strong>One Attempt:</strong> Each practical can only be submitted once</li>
+ <li><strong>View Results:</strong> Click on submitted practical to view your result</li>
+ </ul>
+ <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 6px;">
+ <strong>Important:</strong> Make sure you have a stable internet connection before starting the exam.
+ </div>
+ </div>
+</section>
+
+<!-- PRACTICAL LIST SECTION -->
+<section id="section-practicals" class="dashboard-section">
+ <div class="card card-tilt">
+ <h2>Practical List</h2>
+
+ {% if not subjects %}
+ <!-- No subjects found for this student's year -->
+ <div style="text-align:center; padding:40px 20px;">
+ <div style="font-size:60px; margin-bottom:16px;"></div>
+ <h3 style="color:#666; margin-bottom:8px;">No Practicals Available</h3>
+ <p style="color:#999; font-size:14px; max-width:380px; margin:0 auto; line-height:1.6;">
+ There are no subjects or practicals assigned for your year yet.<br>
+ Please check back later or contact your faculty.
+ </p>
+ </div>
+ {% else %}
+ <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+ <label style="font-weight: 600; margin-right: 10px; color: #1976d2;">Select Subject:</label>
+ <select id="subjectSelect" onchange="changeSubject(this.value)" style="padding: 10px 20px; border: 2px solid #1976d2; border-radius: 6px; font-size: 15px; background: white; cursor: pointer; min-width: 220px;">
+ {% for subject in subjects %}
+ <option value="{{ subject.name }}" {% if selected_subject == subject.name %}selected{% endif %}>{{ subject.name }}</option>
+ {% endfor %}
+ </select>
+ </div>
+
+ <p style="margin-bottom: 15px; color: #666;">
+ Select a practical to start exam or click submitted practical to view result
+ </p>
+
+ <ul class="practical-list" id="practical-list">
+ {% for practical in practicals %}
+ <li class="practical-item {% if practical in submitted_practicals %}practical-submitted{% endif %}" data-value="{{ practical }}">
+ <div>
+ <span class="practical-name">{{ practical }}</span>
+ {% if practical in submitted_practicals %}
+ <br>
+ <span class="submitted-badge"> Submitted</span>
+ {% endif %}
+ </div>
+ {% if practical in submitted_practicals %}
+ <a href="{{ url_for('view_result', practical_name=practical) }}" class="view-result-btn">View Result</a>
+ {% else %}
+ <span class="start-btn" onclick="startExam('{{ practical }}')">Start Exam</span>
+ {% endif %}
+ </li>
+ {% else %}
+ <li style="text-align: center; padding: 20px; color: #666;">
+ No practicals added for this subject yet.
+ </li>
+ {% endfor %}
+ </ul>
+ {% endif %}
+
+ <form method="post" id="start-exam-form" style="display: none;">
+ <input type="hidden" name="practical_name" id="selected-practical">
+ </form>
+ </div>
+</section>
+
+<!-- RULES SECTION -->
+<section id="section-rules" class="dashboard-section">
+ <div class="card card-tilt compact-card">
+ <h2>Exam Rules</h2>
+ <ul class="compact-list">
+ <li><strong>No Tab Switching:</strong> Switching tabs/windows during exam is strictly prohibited</li>
+ <li><strong>No Refresh:</strong> Do not refresh the page during the exam</li>
+ <li><strong>Single Device:</strong> Use only one device and one browser at a time</li>
+ <li><strong>Copy-Paste Disabled:</strong> Ctrl+C, Ctrl+V, and right-click are disabled during exam</li>
+ <li><strong>Timer:</strong> Keep an eye on the timer - exam auto-submits when time expires</li>
+ <li><strong>One Submission Only:</strong> Once submitted, you cannot retake the same practical</li>
+ <li><strong>Honest Attempt:</strong> Answer questions on your own without external help</li>
+ </ul>
+ <div style="margin-top: 20px; padding: 15px; background: #ffebee; border-left: 4px solid #f44336; border-radius: 6px;">
+ <strong>Warning:</strong> Violation of any exam rule may result in automatic submission and disciplinary action.
+ </div>
+ </div>
+</section>
+
+
+<!-- ATTENDANCE SECTION -->
+<section id="section-attendance" class="dashboard-section">
+ <div class="card card-tilt">
+ <h2 style="color:#1976d2; margin-bottom:6px;"> Mark Attendance</h2>
+ <p style="color:#666; margin-bottom:20px;">Enter the code shared by your faculty to mark your presence.</p>
+
+ <!-- Warning Banner (injected by Flask if attendance low) -->
+ {% if attendance_warning %}
+ <div style="padding:13px 18px; border-radius:8px; margin-bottom:18px; font-weight:600; background:#ffebee; border-left:5px solid #c62828; color:#c62828;">
+ {{ attendance_warning.message }}
+ </div>
+ {% endif %}
+
+ <!-- Code Input -->
+ <div style="max-width:420px;">
+ <label style="font-weight:700; font-size:16px; display:block; margin-bottom:8px;">Attendance Code</label>
+ <div style="display:flex; gap:10px;">
+ <input type="text" id="att-code-input" placeholder="e.g. X7K2PQ" maxlength="6"
+ oninput="this.value=this.value.toUpperCase()"
+ style="flex:1; padding:12px; border:2px solid #1976d2; border-radius:8px;
+ font-size:24px; font-weight:800; letter-spacing:6px; text-transform:uppercase;
+ font-family:monospace; text-align:center;">
+ <button onclick="submitAttCode()" class="btn btn-primary"
+ style="padding:12px 22px; font-size:15px; font-weight:700;">
+ Mark Present
+ </button>
+ </div>
+ <div id="att-msg" style="margin-top:10px; font-size:14px; min-height:20px;"></div>
+ </div>
+
+ <!-- My Attendance Summary -->
+ <div style="margin-top:28px; padding-top:22px; border-top:2px solid #e0e0e0;">
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+ <h3 style="color:#1976d2; margin:0;">My Attendance Summary</h3>
+ <button onclick="loadMyAtt()" class="btn btn-primary" style="padding:6px 14px; font-size:13px;">Refresh</button>
+ </div>
+ <div id="att-summary"><p style="color:#999;">Loading...</p></div>
+ </div>
+</section>
+<!-- END ATTENDANCE SECTION -->
+
+<script>
+async function submitAttCode() {
+ const code = (document.getElementById('att-code-input').value || '').trim().toUpperCase();
+ const msg = document.getElementById('att-msg');
+ if (!code || code.length !== 6) {
+ msg.innerHTML = '<span style="color:#c62828;">Enter the 6-character code.</span>';
+ return;
+ }
+ msg.innerHTML = '<span style="color:#1976d2;">Submitting...</span>';
+ try {
+ const res = await fetch('/api/mark_attendance', {
+ method:'POST', headers:{'Content-Type':'application/json'},
+ body: JSON.stringify({code})
+ });
+ const d = await res.json();
+ if (d.success) {
+ msg.innerHTML = `<span style="color:#2e7d32; font-weight:700;"> ${d.message}</span>`;
+ document.getElementById('att-code-input').value = '';
+ loadMyAtt();
+ } else {
+ msg.innerHTML = `<span style="color:#c62828; font-weight:700;">${d.message}</span>`;
+ }
+ } catch(e) { msg.innerHTML = '<span style="color:#c62828;">Error: '+e.message+'</span>'; }
+}
+
+async function loadMyAtt() {
+ const box = document.getElementById('att-summary');
+ try {
+ const res = await fetch('/api/get_my_attendance');
+ const d = await res.json();
+ if (!d.success || !d.subjects.length) {
+ box.innerHTML = '<p style="color:#999;">No attendance records yet.</p>';
+ return;
+ }
+ let html = '<div style="display:flex; flex-wrap:wrap; gap:14px;">';
+ d.subjects.forEach(s => {
+ const col = s.pct>=75?'#2e7d32':s.pct>=65?'#e65100':'#c62828';
+ const bg = s.pct>=75?'#e8f5e9':s.pct>=65?'#fff3e0':'#ffebee';
+ const bdc = s.pct>=75?'#a5d6a7':s.pct>=65?'#ffcc80':'#ef9a9a';
+ const icon= s.pct>=75?'':s.pct>=65?'':'';
+ html += `<div style="background:${bg}; border:2px solid ${bdc}; border-radius:10px;
+ padding:14px 20px; min-width:130px; text-align:center;">
+ <div style="font-weight:900; color:${col}; font-size:30px; line-height:1.1;">${s.pct}%</div>
+ <div style="font-weight:700; font-size:14px; margin-top:3px;">${s.subject}</div>
+ <div style="font-size:12px; color:#777; margin-top:2px;">${s.present}/${s.total} sessions</div>
+ <div style="font-size:11px; color:${col}; font-weight:600; margin-top:3px;">${icon} ${s.pct>=75?'Good':s.pct>=65?'Low':'Critical'}</div>
+ </div>`;
+ });
+ html += '</div>';
+ box.innerHTML = html;
+ } catch(e) { box.innerHTML = '<p style="color:red;">'+e.message+'</p>'; }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+ // Enter key in code input
+ const inp = document.getElementById('att-code-input');
+ if (inp) inp.addEventListener('keydown', e => { if(e.key==='Enter') submitAttCode(); });
+ // Auto-load summary when nav clicked
+ document.querySelectorAll('.nav-btn[data-target]').forEach(btn => {
+ btn.addEventListener('click', function() {
+ if (this.getAttribute('data-target')==='section-attendance') loadMyAtt();
+ });
+ });
+});
+</script>
+
+<!-- ABOUT US SECTION -->
+<section id="section-about" class="dashboard-section">
+ <div class="card">
+ <div style="text-align: center; margin-bottom: 35px;">
+ <h2 style="font-size: 28px; color: #1976d2; margin-bottom: 8px;">About Us</h2>
+ <p style="color: #666; font-size: 15px;">Meet the team behind the Student Practical Assessment System</p>
+ <div style="width: 60px; height: 4px; background: linear-gradient(135deg, #1976d2, #42a5f5); border-radius: 2px; margin: 12px auto 0;"></div>
+ </div>
+
+ <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 25px; justify-items: center;">
+ 
+  <div style="text-align: center; background: linear-gradient(135deg, #e3f2fd, #fff); border-radius: 16px; padding: 25px 20px; box-shadow: 0 4px 15px rgba(25,118,210,0.1); border: 2px solid #bbdefb; width: 100%; max-width: 250px; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+   <div style="width: 85px; height: 85px; border-radius: 50%; background: #e3f2fd; border: 3px solid #1976d2; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 48px;">👩‍🏫</div>
+   <h4 style="margin: 0 0 5px; color: #333; font-size: 18px;">Dr. D.V. Agrawal</h4>
+   <span style="display: inline-block; background: #1976d2; color: white; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Project Guide</span>
+  </div>
+
+ </div>
+
+ <div style="text-align: center; margin-top: 35px; padding: 20px; background: linear-gradient(135deg, #e3f2fd, #fce4ec); border-radius: 12px;">
+ <p style="color: #555; font-size: 14px; margin: 0;">
+ <strong>SPAS</strong> -Student Practical Assessment System<br>
+ <span style="font-size: 13px; color: #777;">Built with dedication by our team 2026</span>
+ </p>
+ </div>
+ </div>
+</section>
+
+<script>
+ /* Subject persistence via localStorage */
+ var SUBJECT_KEY = 'sopes_selected_subject';
+
+ function changeSubject(value) {
+ // Save to localStorage so it persists across reloads/navigation
+ try { localStorage.setItem(SUBJECT_KEY, value); } catch(e) {}
+ window.location.href = '?subject=' + encodeURIComponent(value);
+ }
+
+ document.addEventListener('DOMContentLoaded', function() {
+ var urlParams = new URLSearchParams(window.location.search);
+ var urlSubject = urlParams.get('subject');
+ var sel = document.getElementById('subjectSelect');
+
+ if (!urlSubject && sel) {
+ // No subject in URL - restore from localStorage
+ var saved = '';
+ try { saved = localStorage.getItem(SUBJECT_KEY) || ''; } catch(e) {}
+ if (saved) {
+ // Check if saved subject exists as an option
+ var found = false;
+ for (var i = 0; i < sel.options.length; i++) {
+ if (sel.options[i].value === saved) { found = true; break; }
+ }
+ if (found) {
+ window.location.replace('?subject=' + encodeURIComponent(saved));
+ return;
+ }
+ }
+ } else if (urlSubject && sel) {
+ // URL has subject - save it to localStorage
+ try { localStorage.setItem(SUBJECT_KEY, urlSubject); } catch(e) {}
+ }
+
+ // Inject About Us nav button 
+ const navMenu = document.querySelector('.hamburger-menu') || document.querySelector('.nav-menu') || document.querySelector('nav');
+ if (navMenu) {
+ const logoutLink = navMenu.querySelector('a[href*="logout"]');
+ if (logoutLink) {
+ const aboutBtn = document.createElement('button');
+ aboutBtn.className = 'nav-link nav-btn';
+ aboutBtn.setAttribute('data-target', 'section-about');
+ aboutBtn.textContent = 'About Us';
+ navMenu.insertBefore(aboutBtn, logoutLink);
+ }
+ }
+ });
+
+ function startExam(practicalName) {
+ // Preserve current subject in the form POST so dashboard redirects back correctly
+ var sel = document.getElementById('subjectSelect');
+ var subject = sel ? sel.value : '';
+ try { if (subject) localStorage.setItem(SUBJECT_KEY, subject); } catch(e) {}
+ const form = document.getElementById('start-exam-form');
+ const input = document.getElementById('selected-practical');
+ input.value = practicalName;
+ form.submit();
+ }
+</script>
+
+{% endblock %}

@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* Anti-screenshot & hide nav */
+    .nav {
+        display: none !important;
+    }
+
+    body {
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+    }
+
+    @media print {
+        body {
+            display: none !important;
+        }
+
+        html::after {
+            content: "Printing/saving is disabled for results.";
+            display: block;
+            text-align: center;
+            margin-top: 50px;
+            font-size: 20px;
+        }
+    }
+
+    /* Prevent background from being transparent when hiding content with JS */
+    #overlay-blocker {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: black;
+        color: white;
+        z-index: 9999999;
+        text-align: center;
+        padding-top: 20%;
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    /* Dynamic Result Status Classes */
+    .text-status-correct {
+        color: #2e7d32;
+        font-weight: bold;
+    }
+
+    .text-status-wrong {
+        color: #c62828;
+        font-weight: bold;
+    }
+
+    .text-status-not-attempted {
+        color: #f57f17;
+        font-weight: bold;
+    }
+
+    .bg-status-correct {
+        background-color: #2e7d32;
+    }
+
+    .bg-status-wrong {
+        background-color: #c62828;
+    }
+
+    .bg-status-not-attempted {
+        background-color: #f57f17;
+    }
+
+    .border-status-correct {
+        border-left: 4px solid #2e7d32;
+    }
+
+    .border-status-wrong {
+        border-left: 4px solid #c62828;
+    }
+
+    .border-status-not-attempted {
+        border-left: 4px solid #f57f17;
+    }
+</style>
+
+<div id="overlay-blocker">Screenshots and copying are disabled.</div>
+
+<section class="hero hero-small">
+    <h1>Exam Result</h1>
+</section>
+
+{% if result %}
+<div class="card card-tilt" style="max-width: 600px; margin: 0 auto;">
+    <h2 style="text-align: center; color: #1976d2; margin-bottom: 20px;">Your Performance</h2>
+
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+        <p><strong>Roll Number:</strong> {{ result.roll_no }}</p>
+        <p><strong>Name:</strong> {{ result.name }}</p>
+        <p><strong>Branch:</strong> {{ result.branch }}</p>
+        <p><strong>Year:</strong> {{ result.year }}</p>
+        <p><strong>Email:</strong> {{ result.email }}</p>
+        <p><strong>Practical:</strong> {{ result.practical_name }}</p>
+    </div>
+
+    <hr style="border: none; border-top: 2px solid #e0e0e0; margin: 20px 0;">
+
+    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+        <p><strong>Total Questions:</strong> {{ result.total_questions }}</p>
+        <p><strong>Attempted:</strong> {{ result.attempted }}</p>
+        <p><strong>Correct Answers:</strong> <span style="color: #2e7d32;">{{ result.correct }}</span></p>
+        <p><strong>Wrong Answers:</strong> <span style="color: #c62828;">{{ result.wrong }}</span></p>
+        <p style="font-size: 20px; margin-top: 10px;">
+            <strong>Final Score:</strong>
+            <span style="color: #1976d2; font-size: 24px;">
+                {{ result.correct }} / {{ result.total_questions or 20 }}
+            </span>
+        </p>
+    </div>
+
+    <p style="text-align: center; color: #666;">
+        <strong>Date & Time:</strong> {{ result.datetime }}
+    </p>
+
+    {% if result.detailed_answers and not is_faculty_view %}
+    <div style="text-align: center; margin-top: 20px;">
+        <button onclick="document.getElementById('detailed-result-modal').style.display='block'" class="btn btn-primary"
+            style="padding: 10px 20px; font-size: 16px;">
+            <span style="font-size: 18px; margin-right: 5px;">&#128065;</span>View Detailed Result
+        </button>
+    </div>
+    {% endif %}
+
+</div>
+{% else %}
+<div class="card" style="max-width: 500px; margin: 0 auto; text-align: center;">
+    <p>No recent result available. Please attempt an exam first.</p>
+</div>
+{% endif %}
+
+<div style="text-align: center; margin-top: 20px;">
+    {% if not is_faculty_view %}
+    <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    {% else %}
+    <button class="btn btn-secondary" onclick="window.history.back()">Back</button>
+    {% endif %}
+</div>
+
+{% if result and result.detailed_answers and not is_faculty_view %}
+<div id="detailed-result-modal" class="modal" style="display: none; padding-top: 20px;">
+    <div class="modal-content" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto;">
+        <span class="close"
+            onclick="document.getElementById('detailed-result-modal').style.display='none'">&times;</span>
+        <h3 style="color: #1976d2; margin-top: 0; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px;">Detailed Exam
+            Result</h3>
+
+        <div style="margin-top: 20px;">
+            {% for item in result.detailed_answers %}
+            {% set status_postfix = 'correct' if item.status == 'CORRECT' else ('not-attempted' if item.status == 'NOT
+            ATTEMPTED' else 'wrong') %}
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;"
+                class="border-status-{{ status_postfix }}">
+                <p><strong>Q{{ loop.index }}.</strong> {{ item.question }}</p>
+
+                <div style="margin-left: 15px; margin-bottom: 10px;">
+                    {% for key, val in item.options.items() %}
+                    <div style="margin-bottom: 4px;"><strong>{{ key }}:</strong> {{ val }}</div>
+                    {% endfor %}
+                </div>
+
+                <div
+                    style="display: flex; gap: 20px; font-size: 14px; background: #fff; padding: 10px; border-radius: 6px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <strong>Your Answer:</strong>
+                        <span class="text-status-{{ status_postfix }}">
+                            {{ item.student_answer }}
+                        </span>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <strong>Correct Answer:</strong>
+                        <span class="text-status-correct">{{ item.correct_answer }}</span>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <strong>Status:</strong>
+                        <span
+                            style="border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: bold; color: white;"
+                            class="bg-status-{{ status_postfix }}">
+                            {{ item.status }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div style="text-align: right; margin-top: 20px;">
+            <button class="btn btn-secondary"
+                onclick="document.getElementById('detailed-result-modal').style.display='none'">Close Window</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+    // Anti-screenshot & downloading prevention
+    document.addEventListener('contextmenu', event => event.preventDefault());
+
+    document.addEventListener('keydown', function (e) {
+        // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+P, Ctrl+S, Ctrl+C, PrintScreen, Meta+Shift+S (Mac screenshot)
+        if (e.key === 'F12' ||
+            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'i' || e.key === 'j')) ||
+            (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'P' || e.key === 'p' || e.key === 'S' || e.key === 's' || e.key === 'C' || e.key === 'c')) ||
+            e.key === 'PrintScreen' ||
+            (e.metaKey && e.shiftKey && (e.key === 'S' || e.key === 's' || e.key === '4' || e.key === '3' || e.key === '5'))) {
+
+            e.preventDefault();
+
+            const blocker = document.getElementById('overlay-blocker');
+            if (blocker) {
+                blocker.style.display = 'block';
+                setTimeout(() => { blocker.style.display = 'none'; }, 2000);
+            }
+
+            try {
+                navigator.clipboard.writeText("Screenshots disabled");
+            } catch (err) { }
+        }
+    });
+    document.addEventListener('keyup', function (e) {
+        if (e.key === 'PrintScreen') {
+            const blocker = document.getElementById('overlay-blocker');
+            if (blocker) {
+                blocker.style.display = 'block';
+                setTimeout(() => { blocker.style.display = 'none'; }, 2000);
+            }
+            try {
+                navigator.clipboard.writeText("Screenshots disabled");
+            } catch (err) { }
+        }
+    });
+</script>
+
+{% endblock %}
