@@ -15,10 +15,13 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
-# MySQL database
-MYSQL_URI = "mysql+pymysql://root:root123@localhost/spas_db?charset=utf8mb4"
+# MySQL / Deployment Database
+MYSQL_URI = os.environ.get("DATABASE_URL", "mysql+pymysql://root:root123@localhost/spas_db?charset=utf8mb4")
 app.config["SQLALCHEMY_DATABASE_URI"] = MYSQL_URI
 db.init_app(app)
+
+with app.app_context():
+    db.create_all()
 
 EXAM_DURATION_SECONDS = 15 * 60
 
