@@ -16,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
 # MySQL / Deployment Database
-MYSQL_URI = os.environ.get("DATABASE_URL", "mysql+pymysql://root:root123@localhost/spas_db?charset=utf8mb4")
+MYSQL_URI = os.environ.get("DATABASE_URL", "mysql+pymysql://3uwiFqV6DWGi6A4.root:py7jA17YMeBsGgs8@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/test?ssl_verify_cert=true&ssl_verify_identity=true")
 app.config["SQLALCHEMY_DATABASE_URI"] = MYSQL_URI
 db.init_app(app)
 
@@ -441,7 +441,8 @@ def faculty_dashboard():
                            results=all_results, student_performance=student_performance,
                            practical_submissions=practical_submissions, all_batches=all_batches,
                            subjects=subjects, selected_subject=selected_subject,
-                           selected_batch=selected_batch)
+                           selected_batch=selected_batch,
+                           selected_subject_year=selected_subject_year)
 
 
 @app.route("/api/add_subject", methods=["POST"])
