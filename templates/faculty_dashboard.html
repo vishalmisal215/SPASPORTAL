@@ -63,23 +63,56 @@
  <button id="edit-profile-btn" class="btn btn-primary">Edit Profile</button>
  </div>
  <div id="profile-form" style="display:none;">
- <form method="post" action="{{ url_for('faculty_update_profile') }}">
- <label>Faculty ID</label>
- <input type="text" value="{{ faculty.faculty_id }}" disabled>
- <label>Full Name</label>
- <input type="text" name="full_name" value="{{ faculty.full_name }}" required>
- <label>Department</label>
- <select name="department" required>
- <option value="Computer Engineering" {% if faculty.department == "Computer Technology" %}selected{% endif %}>Computer Technology</option>
- <option value="Information Technology" {% if faculty.department == "Information Technology" %}selected{% endif %}>Information Technology</option>
- 
- </select>
- <label>Email</label>
- <input type="email" name="email" value="{{ faculty.email }}" required>
- <div style="margin-top:15px; display:flex; gap:10px;">
- <button type="submit" class="btn btn-primary">Save Changes</button>
- <button type="button" id="cancel-edit-btn" class="btn btn-secondary">Cancel</button>
- </div>
+ <form method="post" action="{{ url_for('faculty_update_profile') }}" id="edit-profile-form">
+  <label>Faculty ID</label>
+  <input type="text" value="{{ faculty.faculty_id }}" disabled>
+  <label>Full Name</label>
+  <input type="text" name="full_name" value="{{ faculty.full_name }}" required>
+  <label>Department</label>
+  <select name="department" required>
+  <option value="Computer Engineering" {% if faculty.department == "Computer Technology" %}selected{% endif %}>Computer Technology</option>
+  <option value="Information Technology" {% if faculty.department == "Information Technology" %}selected{% endif %}>Information Technology</option>
+  
+  </select>
+  <label>Email</label>
+  <input type="email" name="email" value="{{ faculty.email }}" required>
+
+  <!-- Subject Assignment -->
+  <div style="margin-top:18px;">
+  <label style="font-weight:700; color:#1565c0; font-size:15px; display:block; margin-bottom:8px;">Assigned Subjects</label>
+  <p style="color:#777; font-size:12px; margin-bottom:10px;">Select subjects to assign. If a subject belongs to another faculty, you'll be asked for their password.</p>
+  <div style="max-height:180px; overflow-y:auto; border:2px solid #bbdefb; border-radius:8px; padding:8px; background:#f8f9fa;">
+  {% for subj in all_subjects %}
+  {% set is_mine = subj.name in (faculty.subjects or '').split(',') %}
+  <label class="subj-label {% if is_mine %}subj-label-mine{% else %}subj-label-other{% endif %}">
+  <input type="checkbox" class="subj-checkbox" name="subjects" value="{{ subj.name }}"
+  {% if is_mine %}checked{% endif %}
+  data-subj="{{ subj.name }}"
+  onchange="handleSubjectChange(this)">
+  <span>
+  <strong>{{ subj.name }}</strong>
+  <span class="subj-year-badge">{{ subj.year }}</span>
+  {% if not is_mine %}
+  {% set owner_id = subj_owner_map.get(subj.name, '') %}
+  {% if owner_id %}
+  <span class="subj-owner-badge">Assigned: {{ owner_id }}</span>
+  {% else %}
+  <span class="subj-free-badge">Unassigned</span>
+  {% endif %}
+  {% endif %}
+  </span>
+  </label>
+  {% endfor %}
+  </div>
+  </div>
+
+  <!-- Hidden password fields injected dynamically by JS -->
+  <div id="hidden-pwd-fields"></div>
+
+  <div style="margin-top:15px; display:flex; gap:10px;">
+  <button type="submit" class="btn btn-primary" id="save-profile-btn">Save Changes</button>
+  <button type="button" id="cancel-edit-btn" class="btn btn-secondary">Cancel</button>
+  </div>
  </form>
  </div>
  <div style="margin-top:40px; padding-top:30px; border-top:3px solid #e0e0e0;">
@@ -413,6 +446,36 @@
 
  </main>
 
+ <!-- SUBJECT PASSWORD MODAL -->
+ <div id="subjectPasswordModal" style="display:none; position:fixed; z-index:99999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6);">
+ <div style="background:#fff; margin:8% auto; padding:0; border-radius:14px; max-width:460px; width:95%; box-shadow:0 10px 40px rgba(0,0,0,0.3); overflow:hidden;">
+ <div style="background:linear-gradient(135deg,#e65100,#ff8f00); padding:18px 22px; display:flex; justify-content:space-between; align-items:center;">
+ <div>
+ <h3 style="color:white; margin:0; font-size:18px;">&#128272; Subject Transfer Request</h3>
+ <p id="subjPwdModalSubtitle" style="color:rgba(255,255,255,0.85); margin:4px 0 0; font-size:13px;"></p>
+ </div>
+ <button onclick="closeSubjectPwdModal()" style="background:rgba(255,255,255,0.2); border:2px solid rgba(255,255,255,0.5); color:white; width:34px; height:34px; border-radius:50%; font-size:18px; cursor:pointer;">&times;</button>
+ </div>
+ <div style="padding:22px;">
+ <p style="color:#555; font-size:14px; margin-bottom:16px; line-height:1.6;">
+ The subject <strong id="subjPwdSubjectName" style="color:#e65100;"></strong> is currently assigned to another faculty.<br>
+ Enter that faculty's password to transfer it to your account.
+ </p>
+ <label style="font-weight:600; color:#333; display:block; margin-bottom:6px;">Previous Faculty's Password</label>
+ <div style="position:relative; margin-bottom:16px;">
+ <input type="password" id="subjPwdInput" placeholder="Enter old faculty password"
+ style="width:100%; padding:11px 40px 11px 12px; border:2px solid #e65100; border-radius:8px; font-size:14px; box-sizing:border-box; outline:none;">
+ <span onclick="toggleSubjPwdVisibility()" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:18px; user-select:none;">&#128065;</span>
+ </div>
+ <div id="subjPwdError" style="display:none; background:#ffebee; border:1px solid #ef9a9a; border-radius:6px; padding:10px 14px; color:#c62828; font-size:13px; margin-bottom:12px;"></div>
+ <div style="display:flex; gap:10px;">
+ <button onclick="confirmSubjectPassword()" id="subjPwdConfirmBtn" style="flex:1; padding:12px; background:#e65100; color:white; border:none; border-radius:8px; cursor:pointer; font-size:15px; font-weight:700;">Confirm Transfer</button>
+ <button onclick="cancelSubjectChange()" style="padding:12px 20px; background:#e0e0e0; color:#333; border:none; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">Cancel</button>
+ </div>
+ </div>
+ </div>
+ </div>
+
  <!-- ADD PRACTICAL MODAL -->
  <div id="add-practical-modal" class="modal">
  <div class="modal-content">
@@ -624,7 +687,113 @@
 
  <style>
  @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+ /* Subject assignment label styles */
+ .subj-label { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:6px; margin-bottom:4px; cursor:pointer; border:1px solid #e0e0e0; background:#fff; }
+ .subj-label-mine { background:#e3f2fd; border-color:#1976d2; }
+ .subj-label-other { background:#fff; border-color:#e0e0e0; }
+ .subj-label:hover { background:#f5f5f5; }
+ .subj-label-mine:hover { background:#bbdefb; }
+ .subj-year-badge { background:#e8f5e9; color:#2e7d32; font-size:11px; padding:2px 8px; border-radius:10px; margin-left:6px; }
+ .subj-owner-badge { background:#fff3e0; color:#e65100; font-size:11px; padding:2px 8px; border-radius:10px; margin-left:4px; }
+ .subj-free-badge { background:#f3e5f5; color:#7b1fa2; font-size:11px; padding:2px 8px; border-radius:10px; margin-left:4px; }
  </style>
+
+ <script>
+ /* ── Subject password modal state ── */
+ var _pendingSubject = null;
+ var _pendingCheckbox = null;
+
+ function handleSubjectChange(cb) {
+  var subj = cb.getAttribute('data-subj');
+  if (!cb.checked) { return; } // deselecting is always fine
+  // Check if this subject is owned by another faculty (orange badge present)
+  var label = cb.closest('.subj-label');
+  var ownerBadge = label ? label.querySelector('.subj-owner-badge') : null;
+  if (ownerBadge) {
+  // Show password modal
+  _pendingSubject = subj;
+  _pendingCheckbox = cb;
+  cb.checked = false; // uncheck until password confirmed
+  document.getElementById('subjPwdSubjectName').textContent = subj;
+  var ownerText = ownerBadge.textContent.replace('Assigned: ', '').trim();
+  document.getElementById('subjPwdModalSubtitle').textContent = 'Currently owned by: ' + ownerText;
+  document.getElementById('subjPwdInput').value = '';
+  document.getElementById('subjPwdError').style.display = 'none';
+  document.getElementById('subjectPasswordModal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  setTimeout(function(){ document.getElementById('subjPwdInput').focus(); }, 200);
+  }
+  // If no ownerBadge → unassigned, allow freely
+ }
+
+ function closeSubjectPwdModal() {
+  document.getElementById('subjectPasswordModal').style.display = 'none';
+  document.body.style.overflow = '';
+  _pendingSubject = null;
+  _pendingCheckbox = null;
+ }
+
+ function cancelSubjectChange() {
+  if (_pendingCheckbox) _pendingCheckbox.checked = false;
+  closeSubjectPwdModal();
+ }
+
+ function toggleSubjPwdVisibility() {
+  var inp = document.getElementById('subjPwdInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+ }
+
+ async function confirmSubjectPassword() {
+  var pwd = document.getElementById('subjPwdInput').value.trim();
+  var errDiv = document.getElementById('subjPwdError');
+  var btn = document.getElementById('subjPwdConfirmBtn');
+  if (!pwd) { errDiv.textContent = 'Please enter the password.'; errDiv.style.display = 'block'; return; }
+  btn.textContent = 'Verifying...'; btn.disabled = true;
+  try {
+  var res = await fetch('/api/verify_subject_password', {
+  method: 'POST', headers: {'Content-Type':'application/json'},
+  body: JSON.stringify({subject: _pendingSubject, password: pwd})
+  });
+  var data = await res.json();
+  if (data.success) {
+  // Password correct — allow the checkbox
+  if (_pendingCheckbox) _pendingCheckbox.checked = true;
+  // Store the verified password as a hidden input for form submission
+  var hiddenContainer = document.getElementById('hidden-pwd-fields');
+  var fieldName = 'old_pwd_' + _pendingSubject;
+  var existing = hiddenContainer.querySelector('[name="' + fieldName + '"]');
+  if (!existing) {
+  var hid = document.createElement('input');
+  hid.type = 'hidden'; hid.name = fieldName; hid.value = pwd;
+  hiddenContainer.appendChild(hid);
+  } else { existing.value = pwd; }
+  closeSubjectPwdModal();
+  } else {
+  errDiv.textContent = data.message || 'Incorrect password. Please try again.';
+  errDiv.style.display = 'block';
+  }
+  } catch(e) {
+  errDiv.textContent = 'Connection error: ' + e.message;
+  errDiv.style.display = 'block';
+  } finally {
+  btn.textContent = 'Confirm Transfer'; btn.disabled = false;
+  }
+ }
+
+ /* ── Edit profile toggle ── */
+ document.addEventListener('DOMContentLoaded', function() {
+  var editBtn = document.getElementById('edit-profile-btn');
+  var profileInfo = document.getElementById('profile-info');
+  var profileForm = document.getElementById('profile-form');
+  var cancelBtn = document.getElementById('cancel-edit-btn');
+  if (editBtn) editBtn.addEventListener('click', function() {
+  profileInfo.style.display = 'none'; profileForm.style.display = 'block';
+  });
+  if (cancelBtn) cancelBtn.addEventListener('click', function() {
+  profileForm.style.display = 'none'; profileInfo.style.display = 'block';
+  });
+ });
+ </script>
 
  <script>
  function closeOverlay(id) {

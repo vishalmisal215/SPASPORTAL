@@ -22,6 +22,19 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+    # Set AUTO_INCREMENT = 60001 on all tables (only if they are empty/new)
+    try:
+        _tables = [
+            "users", "faculty", "subjects", "practicals",
+            "questions", "results", "attendance_sessions", "attendance_records"
+        ]
+        for _tbl in _tables:
+            db.session.execute(
+                db.text(f"ALTER TABLE `{_tbl}` AUTO_INCREMENT = 60001")
+            )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()  # Silently ignore if DB doesn't support it
 
 EXAM_DURATION_SECONDS = 15 * 60
 
@@ -146,7 +159,6 @@ def index():
                 full_name = request.form.get("full_name", "").strip()
                 department = request.form.get("department")
                 subjects_list = request.form.getlist("subjects")
-                subjects_str = ",".join(subjects_list)
                 email = request.form.get("email", "").strip()
 
                 if not faculty_id or not password or len(password) < 6:
@@ -154,6 +166,17 @@ def index():
                 elif Faculty.query.filter_by(faculty_id=faculty_id).first():
                     flash("Faculty ID already exists.", "error")
                 else:
+                    # Only allow subjects not already assigned to another faculty
+                    all_faculty = Faculty.query.all()
+                    assigned_map = {}  # subject_name -> faculty_id
+                    for fac_rec in all_faculty:
+                        for s in (fac_rec.subjects or "").split(","):
+                            s = s.strip()
+                            if s:
+                                assigned_map[s] = fac_rec.faculty_id
+                    # Filter out already-assigned subjects
+                    valid_subjects = [s for s in subjects_list if s not in assigned_map]
+                    subjects_str = ",".join(valid_subjects)
                     f = Faculty(faculty_id=faculty_id, full_name=full_name,
                                 department=department, email=email, subjects=subjects_str)
                     f.set_password(password)
@@ -161,7 +184,17 @@ def index():
                     db.session.commit()
                     flash("Faculty profile created successfully. Now you can login.", "success")
 
-    return render_template("login.html", subjects=Subject.query.all())
+    # Build the list of subjects not yet assigned to any faculty
+    all_subjects = Subject.query.all()
+    all_faculty_recs = Faculty.query.all()
+    assigned_subjects = set()
+    for fac_rec in all_faculty_recs:
+        for s in (fac_rec.subjects or "").split(","):
+            s = s.strip()
+            if s:
+                assigned_subjects.add(s)
+    unassigned_subjects = [s for s in all_subjects if s.name not in assigned_subjects]
+    return render_template("login.html", subjects=all_subjects, unassigned_subjects=unassigned_subjects)
 
 
 @app.route("/forgot_password", methods=["POST"])
@@ -323,12 +356,25 @@ def faculty_dashboard():
     all_students_q = User.query.all()
     all_students = {u.roll_no: u.to_dict() for u in all_students_q}
     
-    all_subjects = [s.to_dict() for s in Subject.query.all()]
+    # All subjects as ORM objects (for edit profile form)
+    all_subjects_orm = Subject.query.all()
+    all_subjects_dicts = [s.to_dict() for s in all_subjects_orm]
+
+    # Build owner map: subject_name -> faculty_id (who currently owns it)
+    subj_owner_map = {}
+    for other_fac in Faculty.query.all():
+        if other_fac.faculty_id == session["faculty_id"]:
+            continue
+        for s in (other_fac.subjects or "").split(","):
+            s = s.strip()
+            if s:
+                subj_owner_map[s] = other_fac.faculty_id
+
     fac_subjects = [s.strip() for s in (fac.subjects or "").split(",") if s.strip()]
     if fac_subjects:
-        subjects = [s for s in all_subjects if s["name"] in fac_subjects]
+        subjects = [s for s in all_subjects_dicts if s["name"] in fac_subjects]
     else:
-        subjects = all_subjects
+        subjects = all_subjects_dicts
 
     selected_batch = request.args.get('batch', 'all')
     first_subject = subjects[0]['name'] if subjects else 'all'
@@ -442,7 +488,9 @@ def faculty_dashboard():
                            practical_submissions=practical_submissions, all_batches=all_batches,
                            subjects=subjects, selected_subject=selected_subject,
                            selected_batch=selected_batch,
-                           selected_subject_year=selected_subject_year)
+                           selected_subject_year=selected_subject_year,
+                           all_subjects=all_subjects_orm,
+                           subj_owner_map=subj_owner_map)
 
 
 @app.route("/api/add_subject", methods=["POST"])
@@ -520,12 +568,26 @@ def remove_practical():
 
 @app.route("/export_excel")
 def export_excel():
-    """Export all student performance to Excel"""
+    """Export student performance to Excel, filtered by subject year"""
     if not is_faculty():
         return redirect(url_for("index"))
     try:
-        all_students = {u.roll_no: u.to_dict() for u in User.query.all()}
         selected_subject = request.args.get('subject', 'all')
+
+        # Determine year of selected subject for student filtering
+        subject_year = None
+        if selected_subject and selected_subject != 'all':
+            subj_obj = Subject.query.filter_by(name=selected_subject).first()
+            if subj_obj and subj_obj.year:
+                subject_year = subj_obj.year.strip().lower().replace(" year", "")
+
+        # Filter students by year
+        all_users = User.query.all()
+        if subject_year:
+            filtered_users = [u for u in all_users if (u.year or '').strip().lower().replace(' year', '') == subject_year]
+        else:
+            filtered_users = all_users
+        all_students = {u.roll_no: u.to_dict() for u in filtered_users}
 
         if selected_subject != 'all':
             practicals = get_all_practicals_for_subject(selected_subject)
@@ -681,6 +743,41 @@ def faculty_update_profile():
         fac.full_name = request.form.get("full_name", "").strip()
         fac.department = request.form.get("department")
         fac.email = request.form.get("email", "").strip()
+
+        # Handle subject assignment with password verification
+        new_subjects_list = request.form.getlist("subjects")
+        # Build map of subject -> faculty that owns it (excluding current faculty)
+        all_faculty_recs = Faculty.query.filter(Faculty.faculty_id != fac.faculty_id).all()
+        owner_map = {}  # subject_name -> Faculty object
+        for other_fac in all_faculty_recs:
+            for s in (other_fac.subjects or "").split(","):
+                s = s.strip()
+                if s:
+                    owner_map[s] = other_fac
+
+        contested = [s for s in new_subjects_list if s in owner_map]
+        errors = []
+        # Verify passwords for contested subjects
+        for subj in contested:
+            owner = owner_map[subj]
+            pwd_key = f"old_pwd_{subj}"
+            old_pwd = request.form.get(pwd_key, "").strip()
+            if not old_pwd or not owner.check_password(old_pwd):
+                errors.append(f"Incorrect password for subject '{subj}' (currently assigned to {owner.faculty_id}).")
+
+        if errors:
+            for err in errors:
+                flash(err, "error")
+            return redirect(url_for("faculty_dashboard"))
+
+        # Transfer contested subjects: remove from old faculty
+        for subj in contested:
+            owner = owner_map[subj]
+            old_list = [s.strip() for s in (owner.subjects or "").split(",") if s.strip()]
+            old_list = [s for s in old_list if s != subj]
+            owner.subjects = ",".join(old_list)
+
+        fac.subjects = ",".join(new_subjects_list)
         db.session.commit()
 
         session["full_name"] = fac.full_name
@@ -689,6 +786,29 @@ def faculty_update_profile():
         flash("Profile updated successfully!", "success")
 
     return redirect(url_for("faculty_dashboard"))
+
+
+@app.route("/api/verify_subject_password", methods=["POST"])
+def verify_subject_password():
+    """Check if a password matches the faculty that currently owns the subject."""
+    if not is_faculty():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    data = request.get_json()
+    subject_name = (data.get("subject") or "").strip()
+    password = (data.get("password") or "").strip()
+    if not subject_name or not password:
+        return jsonify({"success": False, "message": "Subject and password required"})
+    # Find faculty that owns this subject
+    all_faculty_recs = Faculty.query.filter(Faculty.faculty_id != session["faculty_id"]).all()
+    for other_fac in all_faculty_recs:
+        subj_list = [s.strip() for s in (other_fac.subjects or "").split(",") if s.strip()]
+        if subject_name in subj_list:
+            if other_fac.check_password(password):
+                return jsonify({"success": True, "owner": other_fac.faculty_id})
+            else:
+                return jsonify({"success": False, "message": f"Wrong password for faculty {other_fac.faculty_id}"})
+    # Subject not owned by anyone else — freely assignable
+    return jsonify({"success": True, "owner": None})
 
 
 @app.route("/student/change_password", methods=["POST"])
@@ -1283,6 +1403,13 @@ def export_attendance_excel():
     batch = request.args.get("batch", "all")
     date = request.args.get("date", "")
 
+    # Determine year filter from subject
+    subject_year = None
+    if subject:
+        subj_obj = Subject.query.filter_by(name=subject).first()
+        if subj_obj and subj_obj.year:
+            subject_year = subj_obj.year.strip().lower().replace(" year", "")
+
     query = AttendanceSession.query
     if subject:
         query = query.filter_by(subject=subject)
@@ -1293,7 +1420,11 @@ def export_attendance_excel():
 
     sessions = [(s.id, s) for s in query.order_by(AttendanceSession.created_at).all()]
 
-    all_users = {u.roll_no: u.to_dict() for u in User.query.all()}
+    all_users_q = User.query.all()
+    # Filter by subject year first
+    if subject_year:
+        all_users_q = [u for u in all_users_q if (u.year or '').strip().lower().replace(' year', '') == subject_year]
+    all_users = {u.roll_no: u.to_dict() for u in all_users_q}
     if batch != "all":
         students = sorted(r for r, u in all_users.items() if u.get("batch") == batch)
     else:

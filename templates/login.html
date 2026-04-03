@@ -181,12 +181,16 @@
                                     <span>▼</span>
                                 </div>
                                 <div class="multiselect-dropdown" id="subject-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-radius: 4px; z-index: 1000; max-height: 150px; overflow-y: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                                    {% for subject in subjects %}
-                                        <label style="display: flex; padding: 8px 10px; margin: 0; cursor: pointer; align-items: center; border-bottom: 1px solid #f0f0f0; font-weight: normal;">
-                                            <input type="checkbox" name="subjects" value="{{ subject.name }}" style="margin-right: 10px; width: auto;" onchange="updateSubjectLabel()">
-                                            {{ subject.name }} ({{ subject.year }})
-                                        </label>
-                                    {% endfor %}
+                                    {% if unassigned_subjects %}
+                                        {% for subject in unassigned_subjects %}
+                                            <label style="display: flex; padding: 8px 10px; margin: 0; cursor: pointer; align-items: center; border-bottom: 1px solid #f0f0f0; font-weight: normal;">
+                                                <input type="checkbox" name="subjects" value="{{ subject.name }}" style="margin-right: 10px; width: auto;" onchange="updateSubjectLabel()">
+                                                {{ subject.name }} ({{ subject.year }})
+                                            </label>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div style="padding: 12px 10px; color: #999; font-size: 13px; text-align: center;">All subjects are assigned to other faculty.</div>
+                                    {% endif %}
                                 </div>
                             </div>
 
